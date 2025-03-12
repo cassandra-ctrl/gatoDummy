@@ -66,4 +66,4 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPClientSocket:
 
     except ConnectionRefusedError:
         print("Error al conectar al servidor")
-    
+    #preuba commit
