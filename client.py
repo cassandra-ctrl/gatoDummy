@@ -1,63 +1,74 @@
-#!/usr/bin/env python3
+
 
 import socket
 
-HOST = "192.168.0.117"  # Dirección IP del servidor
-PORT = 65432  # Puerto que usa el servidor
-buffer_size = 1024
+# Constantes
+HOST = "localhost"
+PORT = 65432
+BUFFER = 1024
 
-# Función para imprimir el tablero con coordenadas
-def imprimir_tablero(tablero):
-    filas = tablero.split("\n")
+# Mostrar el tablero
+def mostrar_tablero(tablero_str):
+    filas = tablero_str.split("\n")
     tamaño = len(filas)
-    print("Tablero actual:")
-    # Imprimir encabezado de columnas
+    print("\nTABLERO ACTUAL")
     print("   " + " ".join(str(i) for i in range(tamaño)))
-    # Imprimir filas con coordenadas
     for i, fila in enumerate(filas):
         print(f"{i} |" + "|".join(fila.split(",")) + "|")
+    print()
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPClientSocket:
-    TCPClientSocket.connect((HOST, PORT))
-    print("Conectado al servidor.")
-
-    # Elegir el tamaño del tablero
-    tamaño = input("Elige el tamaño del tablero (3 para 3x3, 5 para 5x5): ")
-    while tamaño not in ["3", "5"]:
-        print("Opción inválida. Debe ser 3 o 5.")
-        tamaño = input("Elige el tamaño del tablero (3 para 3x3, 5 para 5x5): ")
-    TCPClientSocket.sendall(tamaño.encode())
-
-    # Recibir tablero inicial del servidor
-    tablero = TCPClientSocket.recv(buffer_size).decode()
-    imprimir_tablero(tablero)
-
+# Pedir tamaño del tablero
+def seleccionar_tamaño():
     while True:
-        # Solicitar jugada al usuario
-        try:
-            fila = int(input(f"Ingresa la fila (0-{int(tamaño)-1}): "))
-            columna = int(input(f"Ingresa la columna (0-{int(tamaño)-1}): "))
-            jugada = f"{fila},{columna}"
-            TCPClientSocket.sendall(jugada.encode())
-        except ValueError:
-            print("Entrada inválida. Debes ingresar números.")
-            continue
+        tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
+        if tamaño in ["3", "5"]:
+            return tamaño
+        print("Opción inválida. Intenta de nuevo.")
 
-        # Recibir respuesta del servidor
-        respuesta = TCPClientSocket.recv(buffer_size).decode()
+# Pedir coordenadas de jugada
+def pedir_jugada(tamaño):
+    try:
+        fila = int(input(f"Ingrese fila (0 a {int(tamaño)-1}): "))
+        columna = int(input(f"Ingrese columna (0 a {int(tamaño)-1}): "))
+        return f"{fila},{columna}"
+    except ValueError:
+        print("Error: Solo se permiten números.")
+        return None
 
-        if respuesta == "Fuera de rango":
-            print("La casilla está fuera del rango permitido. Intenta de nuevo.")
-            continue
-        elif respuesta == "Casilla ocupada":
-            print("La casilla ya está ocupada. Intenta de nuevo.")
-            continue
+# Programa principal
+def main():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
+        cliente.connect((HOST, PORT))
+        print("Conectado al servidor.")
 
-        # Actualizar tablero local
-        tablero = respuesta
-        imprimir_tablero(tablero)
+        tamaño = seleccionar_tamaño()
+        cliente.sendall(tamaño.encode())
 
-        # Verificar si el juego ha terminado
-        if respuesta in ["Ganaste", "Perdiste"]:
-            print(respuesta)
-            break
+        tablero = cliente.recv(BUFFER).decode()
+        mostrar_tablero(tablero)
+
+        while True:
+            jugada = pedir_jugada(tamaño)
+            if jugada is None:
+                continue
+
+            cliente.sendall(jugada.encode())
+
+            respuesta = cliente.recv(BUFFER).decode()
+
+            if respuesta == "Fuera de rango":
+                print("La jugada está fuera del tablero.")
+                continue
+            elif respuesta == "Casilla ocupada":
+                print("Esa casilla ya está ocupada.")
+                continue
+            elif respuesta in ["Ganaste", "Perdiste", "Empate"]:
+                tablero_final = cliente.recv(BUFFER).decode()
+                mostrar_tablero(tablero_final)
+                print(respuesta)
+                break
+            else:
+                mostrar_tablero(respuesta)
+
+if __name__ == "__main__":
+    main()
