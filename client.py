@@ -1,5 +1,3 @@
-
-
 import socket
 
 # Constantes
@@ -7,7 +5,7 @@ HOST = "localhost"
 PORT = 65432
 BUFFER = 1024
 
-# Mostrar el tablero
+# Función para mostrar el tablero
 def mostrar_tablero(tablero_str):
     filas = tablero_str.split("\n")
     tamaño = len(filas)
@@ -17,7 +15,7 @@ def mostrar_tablero(tablero_str):
         print(f"{i} |" + "|".join(fila.split(",")) + "|")
     print()
 
-# Pedir tamaño del tablero
+# Función para seleccionar el tamaño del tablero
 def seleccionar_tamaño():
     while True:
         tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
@@ -25,7 +23,7 @@ def seleccionar_tamaño():
             return tamaño
         print("Opción inválida. Intenta de nuevo.")
 
-# Pedir coordenadas de jugada
+# Función para pedir la jugada al usuario
 def pedir_jugada(tamaño):
     try:
         fila = int(input(f"Ingrese fila (0 a {int(tamaño)-1}): "))
@@ -35,7 +33,7 @@ def pedir_jugada(tamaño):
         print("Error: Solo se permiten números.")
         return None
 
-# Programa principal
+# Función principal
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
         cliente.connect((HOST, PORT))

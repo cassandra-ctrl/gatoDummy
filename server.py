@@ -1,5 +1,3 @@
-
-
 import socket
 import random
 
@@ -8,11 +6,11 @@ HOST = "localhost"
 PORT = 65432
 BUFFER = 1024
 
-# Crear tablero vacío
+# Función para crear un tablero vacío
 def crear_tablero(filas, columnas):
     return "\n".join([",".join([" "]*columnas) for _ in range(filas)])
 
-# Mostrar tablero
+# Función para mostrar el tablero
 def mostrar_tablero(tablero_str):
     filas = tablero_str.split("\n")
     tamaño = len(filas)
@@ -22,7 +20,7 @@ def mostrar_tablero(tablero_str):
         print(f"{i} |" + "|".join(fila.split(",")) + "|")
     print()
 
-# Colocar símbolo en el tablero
+# Función para colocar un símbolo en el tablero
 def colocar_simbolo(tablero_str, fila, columna, simbolo):
     tablero = tablero_str.split("\n")
     fila_datos = tablero[fila].split(",")
@@ -30,7 +28,7 @@ def colocar_simbolo(tablero_str, fila, columna, simbolo):
     tablero[fila] = ",".join(fila_datos)
     return "\n".join(tablero)
 
-# Verificar ganador
+# Función para verificar si hay un ganador
 def hay_ganador(tablero_str, simbolo):
     tablero = tablero_str.split("\n")
     tamaño = len(tablero)
@@ -50,14 +48,14 @@ def hay_ganador(tablero_str, simbolo):
 
     return False
 
-# Verificar empate
+# Función para verificar si hay un empate
 def es_empate(tablero_str):
     for fila in tablero_str.split("\n"):
         if " " in fila.split(","):
             return False
     return True
 
-# Jugada aleatoria del servidor
+# Función para realizar una jugada aleatoria del servidor
 def jugada_servidor(tablero_str):
     tablero = tablero_str.split("\n")
     vacias = []
@@ -68,7 +66,7 @@ def jugada_servidor(tablero_str):
                 vacias.append((i, j))
     return random.choice(vacias)
 
-# Programa principal
+# Función principal
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
         servidor.bind((HOST, PORT))
