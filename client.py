@@ -1,18 +1,18 @@
 import socket
 
-# Constantes
 HOST = "localhost"
 PORT = 65432
 BUFFER = 1024
 
 # Función para mostrar el tablero
-def mostrar_tablero(tablero_str):
-    filas = tablero_str.split("\n")
-    tamaño = len(filas)
+def mostrar_tablero(tablero, tamaño):
     print("\nTABLERO ACTUAL")
     print("   " + " ".join(str(i) for i in range(tamaño)))
-    for i, fila in enumerate(filas):
-        print(f"{i} |" + "|".join(fila.split(",")) + "|")
+    for i in range(tamaño):
+        print(f"{i} |", end="")
+        for j in range(tamaño):
+            print(tablero[i * tamaño + j], end="|")
+        print()
     print()
 
 # Función para seleccionar el tamaño del tablero
@@ -20,14 +20,14 @@ def seleccionar_tamaño():
     while True:
         tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
         if tamaño in ["3", "5"]:
-            return tamaño
+            return int(tamaño)
         print("Opción inválida. Intenta de nuevo.")
 
 # Función para pedir la jugada al usuario
 def pedir_jugada(tamaño):
     try:
-        fila = int(input(f"Ingrese fila (0 a {int(tamaño)-1}): "))
-        columna = int(input(f"Ingrese columna (0 a {int(tamaño)-1}): "))
+        fila = int(input(f"Ingrese fila (0 a {tamaño-1}): "))
+        columna = int(input(f"Ingrese columna (0 a {tamaño-1}): "))
         return f"{fila},{columna}"
     except ValueError:
         print("Error: Solo se permiten números.")
@@ -40,10 +40,10 @@ def main():
         print("Conectado al servidor.")
 
         tamaño = seleccionar_tamaño()
-        cliente.sendall(tamaño.encode())
+        cliente.sendall(str(tamaño).encode())
 
         tablero = cliente.recv(BUFFER).decode()
-        mostrar_tablero(tablero)
+        mostrar_tablero(tablero, tamaño)
 
         while True:
             jugada = pedir_jugada(tamaño)
@@ -62,11 +62,11 @@ def main():
                 continue
             elif respuesta in ["Ganaste", "Perdiste", "Empate"]:
                 tablero_final = cliente.recv(BUFFER).decode()
-                mostrar_tablero(tablero_final)
+                mostrar_tablero(tablero_final, tamaño)
                 print(respuesta)
                 break
             else:
-                mostrar_tablero(respuesta)
+                mostrar_tablero(respuesta, tamaño)
 
 if __name__ == "__main__":
     main()

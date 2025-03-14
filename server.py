@@ -1,70 +1,65 @@
 import socket
 import random
 
-# Constantes
 HOST = "localhost"
 PORT = 65432
 BUFFER = 1024
 
 # Función para crear un tablero vacío
-def crear_tablero(filas, columnas):
-    return "\n".join([",".join([" "]*columnas) for _ in range(filas)])
+def crear_tablero(tamaño):
+    tablero = [None] * (tamaño * tamaño)
+
+    for i in range(tamaño * tamaño):
+        tablero[i] = ' '
+
+    return tablero
 
 # Función para mostrar el tablero
-def mostrar_tablero(tablero_str):
-    filas = tablero_str.split("\n")
-    tamaño = len(filas)
+def mostrar_tablero(tablero, tamaño):
     print("\nTABLERO ACTUAL")
     print("   " + " ".join(str(i) for i in range(tamaño)))
-    for i, fila in enumerate(filas):
-        print(f"{i} |" + "|".join(fila.split(",")) + "|")
+    for i in range(tamaño):
+        print(f"{i} |", end="")
+        for j in range(tamaño):
+            print(tablero[i * tamaño + j], end="|")
+        print()
     print()
 
 # Función para colocar un símbolo en el tablero
-def colocar_simbolo(tablero_str, fila, columna, simbolo):
-    tablero = tablero_str.split("\n")
-    fila_datos = tablero[fila].split(",")
-    fila_datos[columna] = simbolo
-    tablero[fila] = ",".join(fila_datos)
-    return "\n".join(tablero)
+def colocar_simbolo(tablero, fila, columna, simbolo, tamaño):
+    tablero[fila * tamaño + columna] = simbolo
+    return tablero
 
 # Función para verificar si hay un ganador
-def hay_ganador(tablero_str, simbolo):
-    tablero = tablero_str.split("\n")
-    tamaño = len(tablero)
-
-    for fila in tablero:
-        if all(celda == simbolo for celda in fila.split(",")):
+def ganador(tablero, simbolo, tamaño):
+    # Verificar filas
+    for i in range(tamaño):
+        if all(tablero[i * tamaño + j] == simbolo for j in range(tamaño)):
             return True
 
-    for col in range(tamaño):
-        if all(fila.split(",")[col] == simbolo for fila in tablero):
+    # Verificar columnas
+    for j in range(tamaño):
+        if all(tablero[i * tamaño + j] == simbolo for i in range(tamaño)):
             return True
 
-    if all(tablero[i].split(",")[i] == simbolo for i in range(tamaño)):
+    # Verificar diagonal principal
+    if all(tablero[i * tamaño + i] == simbolo for i in range(tamaño)):
         return True
-    if all(tablero[i].split(",")[tamaño - 1 - i] == simbolo for i in range(tamaño)):
+
+    # Verificar diagonal secundaria
+    if all(tablero[i * tamaño + (tamaño - 1 - i)] == simbolo for i in range(tamaño)):
         return True
 
     return False
 
 # Función para verificar si hay un empate
-def es_empate(tablero_str):
-    for fila in tablero_str.split("\n"):
-        if " " in fila.split(","):
-            return False
-    return True
+def empate(tablero):
+    return " " not in tablero
 
 # Función para realizar una jugada aleatoria del servidor
-def jugada_servidor(tablero_str):
-    tablero = tablero_str.split("\n")
-    vacias = []
-    for i in range(len(tablero)):
-        fila = tablero[i].split(",")
-        for j in range(len(fila)):
-            if fila[j] == " ":
-                vacias.append((i, j))
-    return random.choice(vacias)
+def jugada_servidor(tablero, tamaño):
+    vacias = [i for i, val in enumerate(tablero) if val == " "]
+    return divmod(random.choice(vacias), tamaño)
 
 # Función principal
 def main():
@@ -77,12 +72,10 @@ def main():
         with cliente:
             print(f"Cliente conectado desde {addr}")
 
-            tamaño = cliente.recv(BUFFER).decode()
-            filas = columnas = int(tamaño)
-
-            tablero = crear_tablero(filas, columnas)
-            mostrar_tablero(tablero)
-            cliente.sendall(tablero.encode())
+            tamaño = int(cliente.recv(BUFFER).decode())
+            tablero = crear_tablero(tamaño)
+            mostrar_tablero(tablero, tamaño)
+            cliente.sendall("".join(tablero).encode())
 
             while True:
                 data = cliente.recv(BUFFER).decode()
@@ -90,46 +83,44 @@ def main():
                     break
 
                 fila, columna = map(int, data.split(","))
-                celdas = tablero.split("\n")
-
-                if fila < 0 or fila >= filas or columna < 0 or columna >= columnas:
+                if fila < 0 or fila >= tamaño or columna < 0 or columna >= tamaño:
                     cliente.sendall("Fuera de rango".encode())
                     continue
-                if celdas[fila].split(",")[columna] != " ":
+                if tablero[fila * tamaño + columna] != " ":
                     cliente.sendall("Casilla ocupada".encode())
                     continue
 
-                tablero = colocar_simbolo(tablero, fila, columna, "X")
-                mostrar_tablero(tablero)
+                tablero = colocar_simbolo(tablero, fila, columna, "X", tamaño)
+                mostrar_tablero(tablero, tamaño)
 
-                if hay_ganador(tablero, "X"):
+                if ganador(tablero, "X", tamaño):
                     cliente.sendall("Ganaste".encode())
-                    cliente.sendall(tablero.encode())
+                    cliente.sendall("".join(tablero).encode())
                     print("Cliente ganó.")
                     break
-                if es_empate(tablero):
+                if empate(tablero):
                     cliente.sendall("Empate".encode())
-                    cliente.sendall(tablero.encode())
+                    cliente.sendall("".join(tablero).encode())
                     print("Empate.")
                     break
 
                 print("Turno del servidor...")
-                fila_cpu, col_cpu = jugada_servidor(tablero)
-                tablero = colocar_simbolo(tablero, fila_cpu, col_cpu, "O")
-                mostrar_tablero(tablero)
+                fila_cpu, col_cpu = jugada_servidor(tablero, tamaño)
+                tablero = colocar_simbolo(tablero, fila_cpu, col_cpu, "O", tamaño)
+                mostrar_tablero(tablero, tamaño)
 
-                if hay_ganador(tablero, "O"):
+                if ganador(tablero, "O", tamaño):
                     cliente.sendall("Perdiste".encode())
-                    cliente.sendall(tablero.encode())
+                    cliente.sendall("".join(tablero).encode())
                     print("Servidor ganó.")
                     break
-                if es_empate(tablero):
+                if empate(tablero):
                     cliente.sendall("Empate".encode())
-                    cliente.sendall(tablero.encode())
+                    cliente.sendall("".join(tablero).encode())
                     print("Empate.")
                     break
 
-                cliente.sendall(tablero.encode())
+                cliente.sendall("".join(tablero).encode())
 
 if __name__ == "__main__":
     main()
