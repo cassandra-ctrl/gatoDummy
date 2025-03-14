@@ -1,6 +1,11 @@
-# servidor.py
+#!/usr/bin/env python3
+
 import socket
 import random
+
+HOST = "192.168.0.117"  # Dirección IP del servidor
+PORT = 65432  # Puerto que usa el servidor
+buffer_size = 1024
 
 # Función para crear un tablero vacío como cadena
 def crear_tablero(filas, columnas):
@@ -54,74 +59,73 @@ def imprimir_tablero(tablero):
     for i, fila in enumerate(filas):
         print(f"{i} |" + "|".join(fila.split(",")) + "|")
 
-# Configuración del servidor
-HOST = "0.0.0.0"  # Escucha en todas las interfaces
-PORT = 12345      # Puerto del servidor
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPServerSocket:
+    TCPServerSocket.bind((HOST, PORT))
+    TCPServerSocket.listen()
+    print("El servidor TCP está disponible y en espera de solicitudes")
 
-# Crear el socket
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
-    servidor.bind((HOST, PORT))
-    servidor.listen(1)
-    print(f"Servidor escuchando en {HOST}:{PORT}...")
+    Client_conn, Client_addr = TCPServerSocket.accept()
+    with Client_conn:
+        print("Conectado a", Client_addr)
 
-    # Aceptar conexión del cliente
-    cliente, direccion = servidor.accept()
-    print(f"Conexión establecida con {direccion}")
+        # Recibir la elección del tamaño del tablero del cliente
+        tamaño_tablero = Client_conn.recv(buffer_size).decode()
+        if tamaño_tablero == "3":
+            filas, columnas = 3, 3
+        else:
+            filas, columnas = 5, 5
 
-    # Recibir la elección del tamaño del tablero del cliente
-    tamaño_tablero = cliente.recv(1024).decode()
-    if tamaño_tablero == "3":
-        filas, columnas = 3, 3
-    else:
-        filas, columnas = 5, 5
-
-    # Crear tablero inicial
-    tablero = crear_tablero(filas, columnas)
-    print(f"Tablero inicial ({filas}x{columnas}):")
-    imprimir_tablero(tablero)
-
-    # Enviar tablero inicial al cliente
-    cliente.sendall(tablero.encode())
-
-    while True:
-        # Recibir jugada del cliente
-        jugada = cliente.recv(1024).decode()
-        fila, columna = map(int, jugada.split(","))
-
-        # Validar jugada
-        filas = tablero.split("\n")
-        if fila < 0 or fila >= len(filas) or columna < 0 or columna >= len(filas):
-            cliente.sendall("Fuera de rango".encode())
-            continue
-        if filas[fila].split(",")[columna] != " ":
-            cliente.sendall("Casilla ocupada".encode())
-            continue
-
-        # Actualizar tablero con la jugada del cliente
-        tablero = actualizar_tablero(tablero, fila, columna, "X")
-        print("Tablero después de la jugada del cliente:")
+        # Crear tablero inicial
+        tablero = crear_tablero(filas, columnas)
+        print(f"Tablero inicial ({filas}x{columnas}):")
         imprimir_tablero(tablero)
 
-        # Verificar si el cliente ha ganado
-        if verificar_ganador(tablero, "X"):
-            cliente.sendall("Ganaste".encode())
-            print("El cliente ha ganado.")
-            break
+        # Enviar tablero inicial al cliente
+        Client_conn.sendall(tablero.encode())
 
-        # Turno del servidor (jugada aleatoria)
-        print("Turno del servidor...")
-        fila, columna = jugada_aleatoria(tablero)
-        tablero = actualizar_tablero(tablero, fila, columna, "O")
-        print("Tablero después de la jugada del servidor:")
-        imprimir_tablero(tablero)
+        while True:
+            # Recibir jugada del cliente
+            print("Esperando a recibir datos...")
+            data = Client_conn.recv(buffer_size).decode()
+            if not data:
+                break
 
-        # Enviar tablero actualizado al cliente
-        cliente.sendall(tablero.encode())
+            fila, columna = map(int, data.split(","))
 
-        # Verificar si el servidor ha ganado
-        if verificar_ganador(tablero, "O"):
-            cliente.sendall("Perdiste".encode())
-            print("El servidor ha ganado.")
-            break
+            # Validar jugada
+            filas = tablero.split("\n")
+            if fila < 0 or fila >= len(filas) or columna < 0 or columna >= len(filas):
+                Client_conn.sendall("Fuera de rango".encode())
+                continue
+            if filas[fila].split(",")[columna] != " ":
+                Client_conn.sendall("Casilla ocupada".encode())
+                continue
 
-    print("Juego terminado")
+            # Actualizar tablero con la jugada del cliente
+            tablero = actualizar_tablero(tablero, fila, columna, "X")
+            print("Tablero después de la jugada del cliente:")
+            imprimir_tablero(tablero)
+
+            # Verificar si el cliente ha ganado
+            if verificar_ganador(tablero, "X"):
+                Client_conn.sendall("Ganaste".encode())
+                print("El cliente ha ganado.")
+                break
+
+            # Turno del servidor (jugada aleatoria)
+            print("Turno del servidor...")
+            fila, columna = jugada_aleatoria(tablero)
+            tablero = actualizar_tablero(tablero, fila, columna, "O")
+            print("Tablero después de la jugada del servidor:")
+            imprimir_tablero(tablero)
+
+            # Enviar tablero actualizado al cliente
+            Client_conn.sendall(tablero.encode())
+
+            # Verificar si el servidor ha ganado
+            if verificar_ganador(tablero, "O"):
+                Client_conn.sendall("Perdiste".encode())
+                print("El servidor ha ganado.")
+                break
+
+        print("Juego terminado")

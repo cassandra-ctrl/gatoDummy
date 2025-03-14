@@ -1,5 +1,10 @@
-# cliente.py
+#!/usr/bin/env python3
+
 import socket
+
+HOST = "192.168.0.117"  # Dirección IP del servidor
+PORT = 65432  # Puerto que usa el servidor
+buffer_size = 1024
 
 # Función para imprimir el tablero con coordenadas
 def imprimir_tablero(tablero):
@@ -12,23 +17,19 @@ def imprimir_tablero(tablero):
     for i, fila in enumerate(filas):
         print(f"{i} |" + "|".join(fila.split(",")) + "|")
 
-# Configuración del cliente
-HOST = input("Ingresa la IP del servidor: ")
-PORT = int(input("Ingresa el puerto del servidor: "))
-
-# Crear el socket y conectar al servidor
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
-    cliente.connect((HOST, PORT))
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPClientSocket:
+    TCPClientSocket.connect((HOST, PORT))
+    print("Conectado al servidor.")
 
     # Elegir el tamaño del tablero
     tamaño = input("Elige el tamaño del tablero (3 para 3x3, 5 para 5x5): ")
     while tamaño not in ["3", "5"]:
         print("Opción inválida. Debe ser 3 o 5.")
         tamaño = input("Elige el tamaño del tablero (3 para 3x3, 5 para 5x5): ")
-    cliente.sendall(tamaño.encode())
+    TCPClientSocket.sendall(tamaño.encode())
 
     # Recibir tablero inicial del servidor
-    tablero = cliente.recv(1024).decode()
+    tablero = TCPClientSocket.recv(buffer_size).decode()
     imprimir_tablero(tablero)
 
     while True:
@@ -37,13 +38,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
             fila = int(input(f"Ingresa la fila (0-{int(tamaño)-1}): "))
             columna = int(input(f"Ingresa la columna (0-{int(tamaño)-1}): "))
             jugada = f"{fila},{columna}"
-            cliente.sendall(jugada.encode())
+            TCPClientSocket.sendall(jugada.encode())
         except ValueError:
             print("Entrada inválida. Debes ingresar números.")
             continue
 
         # Recibir respuesta del servidor
-        respuesta = cliente.recv(1024).decode()
+        respuesta = TCPClientSocket.recv(buffer_size).decode()
 
         if respuesta == "Fuera de rango":
             print("La casilla está fuera del rango permitido. Intenta de nuevo.")
