@@ -1,4 +1,5 @@
 import socket
+import json
 
 HOST = "localhost"
 PORT = 65432
@@ -19,20 +20,12 @@ def mostrar_tablero(tablero, tamaño):
         print()
     print()
 
-# Función para seleccionar el tamaño del tablero
-def seleccionar_tamaño():
-    while True:
-        tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
-        if tamaño in ["3", "5"]:
-            return int(tamaño)
-        print("Opción inválida. Intenta de nuevo.")
-
 # Función para pedir la jugada al usuario
 def pedir_jugada(tamaño):
     try:
         fila = int(input(f"Ingrese fila (0 a {tamaño-1}): "))
         columna = int(input(f"Ingrese columna (0 a {tamaño-1}): "))
-        return [fila, columna]  # Devolvemos una lista en lugar de una cadena
+        return {"tipo": "jugada", "fila": fila, "columna": columna}
     except ValueError:
         print("Error: Solo se permiten números.")
         return None
@@ -41,41 +34,60 @@ def pedir_jugada(tamaño):
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
         cliente.connect((HOST, PORT))
-        print("Conectado al servidor.")
-
-        tamaño = seleccionar_tamaño()
-        cliente.sendall(str(tamaño).encode())
-
-        # Recibir tablero como una lista de caracteres en lugar de una cadena
-        tablero = list(cliente.recv(BUFFER).decode())
-        mostrar_tablero(tablero, tamaño)
+        simbolo = None
+        tamaño = None
+        tablero = []
 
         while True:
-            jugada = pedir_jugada(tamaño)
-            if jugada is None:
-                continue
-
-            # Enviar la jugada como una cadena "fila,columna"
-            cliente.sendall(f"{jugada[0]},{jugada[1]}".encode())
-
-            respuesta = cliente.recv(BUFFER).decode()
-
-            if respuesta == "Fuera de rango":
-                print("La jugada está fuera del tablero.")
-                continue
-            elif respuesta == "Casilla ocupada":
-                print("Esa casilla ya está ocupada.")
-                continue
-            elif respuesta in ["Ganaste", "Perdiste", "Empate"]:
-                # Recibir tablero final como lista de caracteres
-                tablero_final = list(cliente.recv(BUFFER).decode())
-                mostrar_tablero(tablero_final, tamaño)
-                print(respuesta)
+            data = cliente.recv(BUFFER).decode()
+            if not data:
+                print("Conexión cerrada por el servidor.")
                 break
-            else:
-                # Recibir y mostrar el tablero actualizado como lista de caracteres
-                tablero = list(respuesta)
+
+            mensaje = json.loads(data)
+
+            if mensaje["tipo"] == "solicitar_tamano":
+                while True:
+                    tam = input("Selecciona el tamaño del tablero (3 o 5): ")
+                    if tam in ["3", "5"]:
+                        cliente.sendall(json.dumps({"tipo": "tamano", "valor": int(tam)}).encode())
+                        break
+                    else:
+                        print("Opción inválida. Intenta de nuevo.")
+
+            elif mensaje["tipo"] == "simbolo":
+                simbolo = mensaje["valor"]
+                print(f"Tu símbolo es: {simbolo}")
+
+            elif mensaje["tipo"] == "mensaje":
+                print(mensaje["contenido"])
+
+            elif mensaje["tipo"] == "tablero":
+                tablero = mensaje["estado"]
+                tamaño = int(len(tablero) ** 0.5)
                 mostrar_tablero(tablero, tamaño)
+
+            elif mensaje["tipo"] == "error":
+                print(mensaje["mensaje"])
+
+            elif mensaje["tipo"] == "ganador":
+                mostrar_tablero(tablero, tamaño)
+                if mensaje["simbolo"] == simbolo:
+                    print("¡Ganaste!")
+                else:
+                    print(f"El jugador con símbolo {mensaje['simbolo']} ganó.")
+                break
+
+            elif mensaje["tipo"] == "empate":
+                mostrar_tablero(tablero, tamaño)
+                print("¡Empate!")
+                break
+
+            # Después de recibir tablero actualizado, solicitar jugada
+            if simbolo and tamaño and mensaje["tipo"] == "tablero":
+                jugada = pedir_jugada(tamaño)
+                if jugada:
+                    cliente.sendall(json.dumps(jugada).encode())
 
 if __name__ == "__main__":
     main()
