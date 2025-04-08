@@ -1,11 +1,9 @@
 import socket
+import threading
 from datetime import datetime
 
-HOST = "localhost"
-PORT = 65432
 BUFFER = 1024
 
-# Función para mostrar tablero
 def mostrar_tablero(tablero, tamaño):
     print("\nTABLERO ACTUAL")
     print("   ", end="")
@@ -19,107 +17,107 @@ def mostrar_tablero(tablero, tamaño):
         print()
     print()
 
-# Función para seleccionar el tamaño del tablero
-def seleccionar_tamaño():
-    while True:
-        tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
-        if tamaño in ["3", "5"]:
-            return int(tamaño)
-        print("Opción inválida. Intenta de nuevo.")
-
-# Función para pedir la jugada al usuario
 def pedir_jugada(tamaño):
     try:
-        fila = int(input(f"Ingrese fila (0 a {tamaño-1}): "))
-        columna = int(input(f"Ingrese columna (0 a {tamaño-1}): "))
+        fila = int(input(f"Ingrese fila (0 a {tamaño - 1}): "))
+        columna = int(input(f"Ingrese columna (0 a {tamaño - 1}): "))
         if 0 <= fila < tamaño and 0 <= columna < tamaño:
-            return [fila, columna]
+            return f"{fila}{columna}"
         else:
-            print("Error: La fila y columna deben estar dentro del rango.")
+            print("Fuera de rango.")
             return None
     except ValueError:
-        print("Error: Solo se permiten números.")
+        print("Entrada inválida.")
         return None
 
-# Función para calcular días y validar módulo
+def recibir_mensajes(cliente, tamaño):
+    while True:
+        try:
+            mensaje = cliente.recv(BUFFER).decode()
+            if not mensaje:
+                break
+            if mensaje.startswith("Turno") or mensaje.startswith("Ganador") or mensaje.startswith("Empate") or mensaje.startswith("Jugador") or mensaje.startswith("Fuera") or mensaje.startswith("Casilla") or mensaje.startswith("¡Es tu turno!") or mensaje.startswith("Esperando"):
+                print("\n[Servidor]:", mensaje)
+            else:
+                tablero = list(mensaje)
+                mostrar_tablero(tablero, tamaño)
+        except:
+            break
+
 def validar_modulo_fecha():
     while True:
         try:
-            fecha_nacimiento = input("Ingresa tu fecha de nacimiento (formato DD-MM-AAAA): ")
-            fecha_nacimiento_dt = datetime.strptime(fecha_nacimiento, "%d-%m-%Y")
-            fecha_referencia = datetime(2025, 3, 10)
-            dias = (fecha_referencia - fecha_nacimiento_dt).days
-            modulo = dias % 3
-            print(f"\nDías desde tu nacimiento hasta el 10 de marzo de 2025: {dias} días")
-            print(f"Días % 3 = {modulo}")
-            if modulo == 1:
-                print("\n¡Tu juego es GATO! Iniciando partida...\n")
+            fecha = input("Ingresa tu fecha de nacimiento (DD-MM-AAAA): ")
+            nacimiento = datetime.strptime(fecha, "%d-%m-%Y")
+            referencia = datetime(2025, 3, 10)
+            dias = (referencia - nacimiento).days
+            if dias % 3 == 1:
+                print(f"\n¡Tu juego es GATO! ({dias} días desde tu nacimiento)\n")
                 break
             else:
-                print("\nNo es módulo 1. Debes ingresar otra fecha de nacimiento.\n")
+                print("No es módulo 1. Intenta con otra fecha.\n")
         except ValueError:
             print("Formato inválido. Usa DD-MM-AAAA.\n")
 
-# Función principal
 def main():
-    validar_modulo_fecha()
-    ip=input("Ingresa la IP del servidor: ")
+    ip = input("Ingresa la IP del servidor: ")
     try:
-        puerto = int(input("Ingresa el puerto del servidor (ejemplo: 65432): "))
-    except ValueError:
-        print("Puerto inválido. Usando 65432 por defecto.")
-        port = 65432
+        puerto = int(input("Ingresa el puerto (ej. 65432): "))
+    except:
+        puerto = 65432
+        print("Puerto inválido. Se usará 65432 por defecto.")
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
         cliente.connect((ip, puerto))
         print("Conectado al servidor.")
-        print("\n Se usó el protocolo TCP porque garantiza que los mensajes lleguen en orden y sin pérdidas,")
-        print("y evita que se desincronice el juego entre el cliente y el servidor.\n")
-        tamaño = seleccionar_tamaño()
-        cliente.sendall(str(tamaño).encode())
+        print("\nSe usa TCP para mantener el orden y evitar pérdida de datos.\n")
 
-        # Recibir tablero inicial
-        tablero = list(cliente.recv(BUFFER).decode())
+        # Recibir mensaje inicial completo ("Jugador #1" o "Jugador #N")
+        mensajes = ""
+        while True:
+            parte = cliente.recv(BUFFER).decode()
+            mensajes += parte
+            if "Jugador #" in mensajes:
+                break
+
+        print("[Servidor]:", mensajes.strip())
+
+        # Si eres el primer jugador, validar fecha y enviar tamaño del tablero
+        if "Jugador #1" in mensajes:
+            validar_modulo_fecha()
+            while True:
+                tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
+                if tamaño in ["3", "5"]:
+                    cliente.sendall(tamaño.encode())
+                    tamaño = int(tamaño)
+                    break
+                else:
+                    print("Opción inválida.\n")
+        else:
+            tamaño = None
+
+        tablero_data = cliente.recv(BUFFER).decode()
+        tablero = list(tablero_data)
+        tamaño = int(len(tablero) ** 0.5)
         mostrar_tablero(tablero, tamaño)
-        inicio_partida = datetime.now()
+
+        # Hilo para escuchar actualizaciones
+        hilo_escucha = threading.Thread(target=recibir_mensajes, args=(cliente, tamaño), daemon=True)
+        hilo_escucha.start()
 
         while True:
-            jugada = pedir_jugada(tamaño)
-            if jugada is None:
-                continue
-
-            # Enviar jugada
-            cliente.sendall(f"{jugada[0]}{jugada[1]}".encode())
-
-            respuesta = cliente.recv(BUFFER).decode().strip() 
-
-            if respuesta == "Fuera de rango":
-                print("La jugada está fuera del tablero.")
-                continue
-            elif respuesta == "Casilla ocupada":
-                print("Esa casilla ya está ocupada.")
-                continue
-            elif respuesta == "Ganaste":
-                print("¡Ganaste!")
-                tablero = list(cliente.recv(BUFFER).decode())
-                mostrar_tablero(tablero, tamaño)
+            try:
+                turno_msg = cliente.recv(BUFFER).decode()
+                if "¡Es tu turno!" in turno_msg:
+                    print("\n[Servidor]: ¡Es tu turno!\n")
+                    while True:
+                        jugada = pedir_jugada(tamaño)
+                        if jugada:
+                            cliente.sendall(jugada.encode())
+                            break
+            except:
+                print("Conexión cerrada.")
                 break
-            elif respuesta == "Perdiste":
-                print("Perdiste.")
-                tablero = list(cliente.recv(BUFFER).decode())
-                mostrar_tablero(tablero, tamaño)
-                break  
-            elif respuesta == "Empate":
-                print("Empate.")
-                tablero = list(cliente.recv(BUFFER).decode())
-                mostrar_tablero(tablero, tamaño)
-                break
-            elif respuesta == "Continuar":
-                tablero = list(cliente.recv(BUFFER).decode())
-                mostrar_tablero(tablero, tamaño)
-
-        fin_partida = datetime.now()
-        duracion = fin_partida - inicio_partida
-        print(f"\n Tiempo total de la partida: {duracion}segundos")
 
 if __name__ == "__main__":
     main()
