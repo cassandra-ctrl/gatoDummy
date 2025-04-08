@@ -1,69 +1,81 @@
 import socket
 
-# Configuración de IP y puerto
-IP = input("Ingresa la IP del servidor: ")
-PORT = int(input("Ingresa el puerto del servidor: "))
+HOST = "localhost"
+PORT = 65432
+BUFFER = 1024
 
-# Creación del socket y conexión
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as TCPClientSocket:
+# Función para mostrar el tablero sin usar join ni split
+def mostrar_tablero(tablero, tamaño):
+    print("\nTABLERO ACTUAL")
+    print("   ", end="")
+    for i in range(tamaño):
+        print(i, end=" ")
+    print()
+    
+    for i in range(tamaño):
+        print(f"{i} |", end="")
+        for j in range(tamaño):
+            print(tablero[i * tamaño + j], end="|")
+        print()
+    print()
+
+# Función para seleccionar el tamaño del tablero
+def seleccionar_tamaño():
+    while True:
+        tamaño = input("Selecciona el tamaño del tablero (3 o 5): ")
+        if tamaño in ["3", "5"]:
+            return int(tamaño)
+        print("Opción inválida. Intenta de nuevo.")
+
+# Función para pedir la jugada al usuario
+def pedir_jugada(tamaño):
     try:
-        TCPClientSocket.connect((IP, PORT))
-        
-        # Mensaje de bienvenida del servidor
-        mensaje = TCPClientSocket.recv(1024).decode()
-        print(mensaje)
+        fila = int(input(f"Ingrese fila (0 a {tamaño-1}): "))
+        columna = int(input(f"Ingrese columna (0 a {tamaño-1}): "))
+        return [fila, columna]  # Devolvemos una lista en lugar de una cadena
+    except ValueError:
+        print("Error: Solo se permiten números.")
+        return None
 
-        # Se selecioona nivel de dificultad y lo enviamos al Server
-        nivel = input("Ingresa dificultad de la partida (1= Principiante | 2= Avanzado): ")
-        
-        # Validar el nivel de dificultad
-        if nivel not in ['1', '2']:
-            print("Nivel inválido. Debe ser 1 o 2.")
-            exit(1)
-        
-        # Enviamos el nivel al servidor y lo codificamos
-        TCPClientSocket.sendall(nivel.encode())
+# Función principal
+def main():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as cliente:
+        cliente.connect((HOST, PORT))
+        print("Conectado al servidor.")
 
-        # Determinar el tamaño del tablero basado en el nivel
-        if nivel == '1':
-            filas, columnas = 3, 3
-        if nivel == '2':
-            filas, columnas = 5, 5
-        else:
-            filas, columnas = 3,3
+        tamaño = seleccionar_tamaño()
+        cliente.sendall(str(tamaño).encode())
+
+        # Recibir tablero como una lista de caracteres en lugar de una cadena
+        tablero = list(cliente.recv(BUFFER).decode())
+        mostrar_tablero(tablero, tamaño)
 
         while True:
-            # Decodificamos el tablero
-            tablero = TCPClientSocket.recv(1024).decode()
-            print(tablero)
-
-            # Solicitar la jugada al usuario
-            try:
-                fila = int(input(f"Ingrese fila (0-{filas-1}): "))
-                columna = int(input(f"Ingrese columna (0-{columnas-1}): "))
-                
-                # Validar que la fila y columna estén dentro del rango
-                if fila < 0 or fila >= filas or columna < 0 or columna >= columnas:
-                    print("Movimiento fuera de rango.")
-                    continue
-                
-                jugada = f"{fila},{columna}"
-                
-                # Enviamos la jugada al
-                TCPClientSocket.sendall(jugada.encode())
-
-                # Respuesta del servidor
-                respuesta = TCPClientSocket.recv(1024).decode()
-                print(respuesta)
-
-                if respuesta == "fin":
-                    print("Juego terminado")
-                    break
-
-            except ValueError:
-                print("Entrada inválida. Debes ingresar números.")
+            jugada = pedir_jugada(tamaño)
+            if jugada is None:
                 continue
 
-    except ConnectionRefusedError:
-        print("Error al conectar al servidor")
-    
+            # Enviar la jugada como una cadena "fila,columna"
+            cliente.sendall(f"{jugada[0]},{jugada[1]}".encode())
+
+            respuesta = cliente.recv(BUFFER).decode()
+
+            if respuesta == "Fuera de rango":
+                print("La jugada está fuera del tablero.")
+                continue
+            elif respuesta == "Casilla ocupada":
+                print("Esa casilla ya está ocupada.")
+                continue
+            elif respuesta in ["Ganaste", "Perdiste", "Empate"]:
+                # Recibir tablero final como lista de caracteres
+                tablero_final = list(cliente.recv(BUFFER).decode())
+                mostrar_tablero(tablero_final, tamaño)
+                print(respuesta)
+                break
+            else:
+                # Recibir y mostrar el tablero actualizado como lista de caracteres
+                tablero = list(respuesta)
+                mostrar_tablero(tablero, tamaño)
+
+if __name__ == "__main__":
+    main()
