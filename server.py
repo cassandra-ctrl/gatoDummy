@@ -1,92 +1,90 @@
-
 import socket
 import random
-import threading
 
-HOST = "localhost"
-PORT = 65432
+
 BUFFER = 1024
+host="localhost"
+port=65432
 
 # Función para crear un tablero vacío
 def crear_tablero(tamaño):
-    tablero = [None] * (tamaño * tamaño)
-
-    for i in range(tamaño * tamaño):
-        tablero[i] = ' '
-
-    return tablero
+    return [' '] * (tamaño * tamaño)
 
 # Función para mostrar el tablero
 def mostrar_tablero(tablero, tamaño):
     print("\nTABLERO ACTUAL")
-
-    # Imprime encabezado de columnas
-    # end: Ya no agrega el salto de linea
     print("   ", end="")
     for i in range(tamaño):
         print(i, end=" ")
     print()
-
-    # Imprime filas
-    #i = filas
-    #j= columna
     for i in range(tamaño):
-        print(i, end=" |")  # Índice de la fila
+        print(i, end=" |")
         for j in range(tamaño):
             print(tablero[i * tamaño + j], end="|")
-        print()  # Salto de línea al final de cada fila
-    print()  # Salto de línea extra para mejor formato
+        print()
+    print()
 
 # Función para colocar un símbolo en el tablero
 def colocar_simbolo(tablero, fila, columna, simbolo, tamaño):
     tablero[fila * tamaño + columna] = simbolo
     return tablero
 
-# Función para verificar si hay un ganador
-# Función para verificar si un jugador ha ganado
 def ganador(tablero, simbolo, tamaño):
     # Verificar filas
     for i in range(tamaño):
-        if all(tablero[i * tamaño + j] == simbolo for j in range(tamaño)):
+        contador = 0
+        for j in range(tamaño):
+            if tablero[i * tamaño + j] == simbolo:
+                contador += 1
+        if contador == tamaño:
             return True
+
     # Verificar columnas
     for j in range(tamaño):
-        if all(tablero[i * tamaño + j] == simbolo for i in range(tamaño)):
-            return True
+        contador = 0
+        for i in range(tamaño):
+            if tablero[i * tamaño + j] == simbolo:
+                contador += 1
+        if contador == tamaño:
+                    return True
+
     # Verificar diagonal principal
-    if all(tablero[i * tamaño + i] == simbolo for i in range(tamaño)):
+    contador = 0
+    for i in range(tamaño):
+        if tablero[i * tamaño + i] == simbolo:
+            contador += 1
+    if contador == tamaño:
         return True
+
     # Verificar diagonal secundaria
-    if all(tablero[i * tamaño + (tamaño - 1 - i)] == simbolo for i in range(tamaño)):
+    contador = 0
+    for i in range(tamaño):
+        if tablero[i * tamaño + (tamaño - 1 - i)] == simbolo:
+            contador += 1
+    if contador == tamaño:
         return True
+
     return False
 
-# Función para verificar si hay un empate
-def empate(tablero):
-    return " " not in tablero
 
-# Función para realizar una jugada aleatoria del servidor
+def empate(tablero):
+    for casilla in tablero:
+        if casilla == ' ':
+            return False
+    return True
+
+
+# Jugada aleatoria del servidor
 def jugada_servidor(tablero, tamaño):
     vacias = [i for i, val in enumerate(tablero) if val == ' ']
     return divmod(random.choice(vacias), tamaño)
 
-def numero_jugadores():
-    jugadores = int(print("Ingrese el numero de jugadores:"))
-    hilos = []
-    for i in range(jugadores):
-        print(f"Creando hilo {i}")
-        hilo = threading.Thread(target=colocar_simbolo)
-        hilos.append(hilo)
-    
-
-# Función principal que maneja la lógica del servidor
+# Función principal
 def main():
-    HOST = '127.0.0.1'  # Dirección del servidor
-    PORT = 65432        # Puerto de escucha
-    BUFFER = 1024       # Tamaño del buffer para recibir datos
-    
+
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
-        servidor.bind((HOST, PORT))
+        servidor.bind((host, port))
         servidor.listen()
         print("Servidor en espera...")
 
@@ -94,11 +92,11 @@ def main():
         with cliente:
             print(f"Cliente conectado desde {addr}")
 
-            # Recibir tamaño del tablero del cliente
+            # Recibir tamaño del tablero
             tamaño = int(cliente.recv(BUFFER).decode())
             tablero = crear_tablero(tamaño)
             mostrar_tablero(tablero, tamaño)
-            cliente.sendall(bytes(tablero))
+            cliente.sendall("".join(tablero).encode())
 
             while True:
                 # Recibir jugada del cliente
@@ -107,33 +105,60 @@ def main():
                     break
 
                 fila, columna = int(data[0]), int(data[1])
-                
+                mensaje = ""
+                tablero_actualizado = None
+
                 # Verificar si la jugada es válida
                 if fila < 0 or fila >= tamaño or columna < 0 or columna >= tamaño:
-                    cliente.sendall("Fuera de rango".encode())
-                    continue
-                if tablero[fila * tamaño + columna] != ' ':
-                    cliente.sendall("Casilla ocupada".encode())
-                    continue
+                    mensaje = "Fuera de rango"
+                elif tablero[fila * tamaño + columna] != ' ':
+                    mensaje = "Casilla ocupada"
+                else:
+                    # Colocar símbolo del cliente
+                    tablero = colocar_simbolo(tablero, fila, columna, 'X', tamaño)
+                    mostrar_tablero(tablero, tamaño)
 
-                # Colocar símbolo del cliente en el tablero
-                tablero = colocar_simbolo(tablero, fila, columna, 'X', tamaño)
-                mostrar_tablero(tablero, tamaño)
+                    # Verificar si el cliente ganó
+                    if ganador(tablero, 'X', tamaño):
+                        mensaje = "Ganaste"
+                        tablero_actualizado = "".join(tablero)
+                        print("Cliente ganó.")
+                    elif empate(tablero):
+                        mensaje = "Empate"
+                        tablero_actualizado = "".join(tablero)
+                        print("Empate.")
+                    else:
+                        # Turno del servidor
+                        print("Turno del servidor...")
+                        fila_cpu, col_cpu = jugada_servidor(tablero, tamaño)
+                        tablero = colocar_simbolo(tablero, fila_cpu, col_cpu, 'O', tamaño)
+                        mostrar_tablero(tablero, tamaño)
 
-                # Verificar si el cliente ganó
-                if ganador(tablero, 'X', tamaño):
-                    cliente.sendall("Ganaste".encode())
-                    cliente.sendall(bytes(tablero))
-                    print("Cliente ganó.")
+                        # Verificar si el servidor ganó
+                        if ganador(tablero, 'O', tamaño):
+                            mensaje = "Perdiste"
+                            tablero_actualizado = "".join(tablero)
+                            print("Servidor ganó.")
+                        elif empate(tablero):
+                            mensaje = "Empate"
+                            tablero_actualizado = "".join(tablero)
+                            print("Empate.")
+                        else:
+                            mensaje = "Continuar"
+                            tablero_actualizado = "".join(tablero)
+
+                # Enviar mensaje al cliente
+                cliente.sendall(mensaje.encode())
+
+                # Si corresponde, enviar tablero
+                if tablero_actualizado:
+                    cliente.sendall(tablero_actualizado.encode())
+
+                # Si la partida terminó, salir del bucle
+                if mensaje in ["Ganaste", "Perdiste", "Empate"]:
                     break
-                if empate(tablero):
-                    cliente.sendall("Empate".encode())
-                    cliente.sendall(bytes(tablero))
-                    print("Empate.")
-                    break
 
-                # Turno del servidor
-                print("Turno del servidor...")
-                fila_cpu, col_cpu = jugada_servidor(tablero, tamaño)
-                tablero = colocar_simbolo(tablero, fila_cpu, col_cpu, 'O', tamaño)
-                mostrar_tablero(tablero, tamaño)
+
+
+if __name__ == "__main__":
+    main()
